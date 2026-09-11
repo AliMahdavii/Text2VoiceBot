@@ -11,14 +11,18 @@ from keyboards import (
     change_language_keyboard
 )
 
+from database import (
+    create_table,
+    save_language,
+    get_language
+)
+
 
 load_dotenv()
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
 bot = telebot.TeleBot(BOT_TOKEN)
-
-user_languages = {}
 
 
 @bot.message_handler(commands=["start"])
@@ -37,7 +41,10 @@ def start(message):
 def select_language(call):
     language = call.data.replace("lang_", "")
 
-    user_languages[call.from_user.id] = language
+    save_language(
+        call.from_user.id,
+        language
+    )
 
     bot.answer_callback_query(
         call.id,
@@ -80,9 +87,8 @@ async def generate_persian_audio(text, filename):
 def text_to_speech(message):
     text = message.text
 
-    language = user_languages.get(
-        message.from_user.id,
-        "en"
+    language = get_language(
+        message.from_user.id
     )
 
     filename = f"voice_{message.from_user.id}.mp3"
@@ -123,6 +129,8 @@ def text_to_speech(message):
         if os.path.exists(filename):
             os.remove(filename)
 
+
+create_table()
 
 print("Bot is running...")
 
