@@ -1,5 +1,4 @@
 import os
-
 import telebot
 from dotenv import load_dotenv
 from gtts import gTTS
@@ -25,20 +24,25 @@ def text_to_speech(message):
 
     text = message.text
 
-    tts = gTTS(
-        text=text,
-        lang="en"
-    )
+    # Create a unique filename for each user
+    filename = f"voice_{message.from_user.id}.mp3"
 
-    filename = "voice.mp3"
+    try:
+        # Convert text to speech
+        tts = gTTS(text=text, lang="en")
+        tts.save(filename)
 
-    tts.save(filename)
+        # Send audio to user
+        with open(filename, "rb") as audio:
+            bot.send_audio(
+                message.chat.id,
+                audio
+            )
 
-    with open(filename, "rb") as audio:
-        bot.send_audio(
-            message.chat.id,
-            audio
-        )
+    finally:
+        # Delete the audio file after sending
+        if os.path.exists(filename):
+            os.remove(filename)
 
 
 print("Bot is running...")
