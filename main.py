@@ -1,21 +1,25 @@
 import os
+import asyncio
 
 import telebot
 from dotenv import load_dotenv
-from gtts import gTTS
-import asyncio
 import edge_tts
 
 from keyboards import (
     language_keyboard,
-    change_language_keyboard
+    voice_keyboard,
+    change_language_keyboard,
+    settings_keyboard
 )
 
 from database import (
     create_table,
     save_language,
-    get_language
+    save_voice,
+    get_user_settings
 )
+
+from voices import VOICES
 
 
 load_dotenv()
@@ -52,11 +56,35 @@ def select_language(call):
     )
 
     bot.edit_message_text(
-        "✅ Language selected!\n\n"
+        "🎙️ Choose your voice:",
+        call.message.chat.id,
+        call.message.message_id,
+        reply_markup=voice_keyboard()
+    )
+
+
+@bot.callback_query_handler(
+    func=lambda call: call.data.startswith("voice_")
+)
+def select_voice(call):
+    voice = call.data.replace("voice_", "")
+
+    save_voice(
+        call.from_user.id,
+        voice
+    )
+
+    bot.answer_callback_query(
+        call.id,
+        "Voice selected ✅"
+    )
+
+    bot.edit_message_text(
+        "✅ Settings saved!\n\n"
         "Now send me some text 🎙️",
         call.message.chat.id,
         call.message.message_id,
-        reply_markup=change_language_keyboard()
+        reply_markup=settings_keyboard()
     )
 
 
@@ -74,10 +102,24 @@ def change_language(call):
     )
 
 
-async def generate_persian_audio(text, filename):
+@bot.callback_query_handler(
+    func=lambda call: call.data == "change_voice"
+)
+def change_voice(call):
+    bot.answer_callback_query(call.id)
+
+    bot.edit_message_text(
+        "🎙️ Choose your new voice:",
+        call.message.chat.id,
+        call.message.message_id,
+        reply_markup=voice_keyboard()
+    )
+
+
+async def generate_audio(text, voice, filename):
     communicate = edge_tts.Communicate(
         text,
-        "fa-IR-FaridNeural"
+        voice
     )
 
     await communicate.save(filename)
@@ -87,29 +129,22 @@ async def generate_persian_audio(text, filename):
 def text_to_speech(message):
     text = message.text
 
-    language = get_language(
+    language, selected_voice = get_user_settings(
         message.from_user.id
     )
+
+    voice = VOICES[language][selected_voice]
 
     filename = f"voice_{message.from_user.id}.mp3"
 
     try:
-
-        if language == "fa":
-            asyncio.run(
-                generate_persian_audio(
-                    text,
-                    filename
-                )
+        asyncio.run(
+            generate_audio(
+                text,
+                voice,
+                filename
             )
-
-        else:
-            tts = gTTS(
-                text=text,
-                lang=language
-            )
-
-            tts.save(filename)
+        )
 
         with open(filename, "rb") as audio:
             bot.send_audio(

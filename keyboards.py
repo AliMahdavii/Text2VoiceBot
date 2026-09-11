@@ -30,6 +30,24 @@ def language_keyboard():
     return keyboard
 
 
+def voice_keyboard():
+    keyboard = types.InlineKeyboardMarkup()
+
+    male = types.InlineKeyboardButton(
+        "👨 Male",
+        callback_data="voice_male"
+    )
+
+    female = types.InlineKeyboardButton(
+        "👩 Female",
+        callback_data="voice_female"
+    )
+
+    keyboard.add(male, female)
+
+    return keyboard
+
+
 def change_language_keyboard():
     keyboard = types.InlineKeyboardMarkup()
 
@@ -39,5 +57,24 @@ def change_language_keyboard():
     )
 
     keyboard.add(button)
+
+    return keyboard
+
+
+def settings_keyboard():
+    keyboard = types.InlineKeyboardMarkup()
+
+    change_language = types.InlineKeyboardButton(
+        "🌍 Change Language",
+        callback_data="change_language"
+    )
+
+    change_voice = types.InlineKeyboardButton(
+        "🎙️ Change Voice",
+        callback_data="change_voice"
+    )
+
+    keyboard.add(change_language)
+    keyboard.add(change_voice)
 
     return keyboard
