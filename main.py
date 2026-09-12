@@ -8,7 +8,6 @@ import edge_tts
 from keyboards import (
     language_keyboard,
     voice_keyboard,
-    change_language_keyboard,
     settings_keyboard
 )
 
@@ -26,17 +25,88 @@ load_dotenv()
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
+user_messages = {}
+
 bot = telebot.TeleBot(BOT_TOKEN)
+
+
+def get_settings_text(language, voice):
+    languages = {
+        "en": "🇺🇸 English",
+        "fa": "🇮🇷 فارسی",
+        "fr": "🇫🇷 Français",
+        "de": "🇩🇪 Deutsch"
+    }
+
+    voices = {
+        "male": "👨 Male",
+        "female": "👩 Female"
+    }
+
+    return (
+        "🎙️ Text2Voice\n\n"
+        f"🌍 Language: {languages[language]}\n"
+        f"🎙️ Voice: {voices[voice]}\n\n"
+        "Send me your text 👇"
+    )
+
+
+def delete_previous_messages(user_id, chat_id):
+
+    if user_id not in user_messages:
+        return
+
+    messages = user_messages[user_id]
+
+    for key in [
+        "user_message",
+        "status_message",
+        "audio_message"
+    ]:
+
+        message_id = messages.get(key)
+
+        if message_id:
+
+            try:
+                bot.delete_message(
+                    chat_id,
+                    message_id
+                )
+            except Exception:
+                pass
+
+    # Keep settings message
+    settings_message = messages.get(
+        "settings_message"
+    )
+
+    user_messages[user_id] = {
+        "settings_message": settings_message
+    }
 
 
 @bot.message_handler(commands=["start"])
 def start(message):
-    bot.send_message(
+
+    user_id = message.from_user.id
+    language, voice = get_user_settings(user_id)
+
+    if user_id in user_messages:
+        delete_previous_messages(
+            user_id,
+            message.chat.id
+        )
+
+    settings_message = bot.send_message(
         message.chat.id,
-        "🎙️ Welcome to Text2Voice Bot!\n\n"
-        "Choose your language:",
-        reply_markup=language_keyboard()
+        get_settings_text(language, voice),
+        reply_markup=settings_keyboard()
     )
+
+    user_messages[user_id] = {
+        "settings_message": settings_message.message_id
+    }
 
 
 @bot.callback_query_handler(
@@ -79,9 +149,15 @@ def select_voice(call):
         "Voice selected ✅"
     )
 
+    language, voice = get_user_settings(
+        call.from_user.id
+    )
+
     bot.edit_message_text(
-        "✅ Settings saved!\n\n"
-        "Now send me some text 🎙️",
+        get_settings_text(
+            language,
+            voice
+        ),
         call.message.chat.id,
         call.message.message_id,
         reply_markup=settings_keyboard()
@@ -127,17 +203,42 @@ async def generate_audio(text, voice, filename):
 
 @bot.message_handler(func=lambda message: True)
 def text_to_speech(message):
+
+    user_id = message.from_user.id
+    chat_id = message.chat.id
     text = message.text
 
+    # Delete previous messages
+    delete_previous_messages(
+        user_id,
+        chat_id
+    )
+
+    # Save current user message
+    user_messages[user_id] = {
+        "user_message": message.message_id
+    }
+
     language, selected_voice = get_user_settings(
-        message.from_user.id
+        user_id
     )
 
     voice = VOICES[language][selected_voice]
 
-    filename = f"voice_{message.from_user.id}.mp3"
+    filename = f"voice_{user_id}.mp3"
+
+    # Send status message
+    status_message = bot.send_message(
+        chat_id,
+        "⏳ Preparing your audio..."
+    )
+
+    user_messages[user_id]["status_message"] = (
+        status_message.message_id
+    )
 
     try:
+
         asyncio.run(
             generate_audio(
                 text,
@@ -146,14 +247,36 @@ def text_to_speech(message):
             )
         )
 
+        # Delete status message
+        bot.delete_message(
+            chat_id,
+            status_message.message_id
+        )
+
+        # Send audio
         with open(filename, "rb") as audio:
-            bot.send_audio(
-                message.chat.id,
+
+            audio_message = bot.send_audio(
+                chat_id,
                 audio
             )
 
+        # Save audio message ID
+        user_messages[user_id]["audio_message"] = (
+            audio_message.message_id
+        )
+
     except Exception as error:
+
         print(f"TTS Error: {error}")
+
+        try:
+            bot.delete_message(
+                chat_id,
+                status_message.message_id
+            )
+        except Exception:
+            pass
 
         bot.reply_to(
             message,
@@ -161,6 +284,7 @@ def text_to_speech(message):
         )
 
     finally:
+
         if os.path.exists(filename):
             os.remove(filename)
 

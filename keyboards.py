@@ -48,19 +48,6 @@ def voice_keyboard():
     return keyboard
 
 
-def change_language_keyboard():
-    keyboard = types.InlineKeyboardMarkup()
-
-    button = types.InlineKeyboardButton(
-        "🔄 Change Language",
-        callback_data="change_language"
-    )
-
-    keyboard.add(button)
-
-    return keyboard
-
-
 def settings_keyboard():
     keyboard = types.InlineKeyboardMarkup()
 
